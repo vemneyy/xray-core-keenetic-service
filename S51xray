@@ -1,0 +1,78 @@
+#!/bin/sh
+
+PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+
+PIDFILE="/opt/var/run/xray.pid"
+XRAY="/opt/sbin/xray"
+CONFIG="/opt/etc/xray/config.json"
+LOGFILE="/opt/var/log/xray.log"
+
+xray_status() {
+    if [ -f "$PIDFILE" ]; then
+        PID="$(cat "$PIDFILE")"
+        [ -d "/proc/$PID" ] && return 0
+    fi
+    return 1
+}
+
+start() {
+    if xray_status; then
+        echo "[INFO] Xray is already running (PID: $(cat "$PIDFILE"))."
+    else
+        echo "[INFO] Starting Xray..."
+        "$XRAY" run -config "$CONFIG" >> "$LOGFILE" 2>&1 &
+        echo $! > "$PIDFILE"
+        echo "[INFO] Xray started (PID: $(cat "$PIDFILE"))."
+    fi
+}
+
+stop() {
+    if xray_status; then
+        echo "[INFO] Stopping Xray..."
+        kill "$(cat "$PIDFILE")" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            rm -f "$PIDFILE"
+            echo "[INFO] Xray stopped."
+        else
+            echo "[WARNING] Failed to stop Xray."
+        fi
+    else
+        echo "[INFO] Xray is not running."
+    fi
+}
+
+status() {
+    if xray_status; then
+        echo "[INFO] Xray is running (PID: $(cat "$PIDFILE"))."
+    else
+        echo "[INFO] Xray is not running."
+    fi
+}
+
+restart() {
+    echo "[INFO] Restarting Xray in background..."
+    (
+        stop
+        start
+    ) </dev/null >/dev/null 2>&1 &
+    echo "[INFO] Xray restart started. Connection may be lost."
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    restart)
+        restart
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
